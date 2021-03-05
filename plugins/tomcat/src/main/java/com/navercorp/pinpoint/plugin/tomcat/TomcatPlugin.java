@@ -31,6 +31,7 @@ import com.navercorp.pinpoint.common.trace.ServiceType;
 import com.navercorp.pinpoint.plugin.jboss.JbossConfig;
 import com.navercorp.pinpoint.plugin.jboss.JbossConstants;
 import com.navercorp.pinpoint.plugin.jboss.JbossDetector;
+import com.navercorp.pinpoint.plugin.jboss.Jboss4Detector;
 import com.navercorp.pinpoint.plugin.tomcat.interceptor.ConnectorInitializeInterceptor;
 import com.navercorp.pinpoint.plugin.tomcat.interceptor.RequestStartAsyncInterceptor;
 import com.navercorp.pinpoint.plugin.tomcat.interceptor.StandardHostValveInvokeInterceptor;
@@ -81,7 +82,8 @@ public class TomcatPlugin implements ProfilerPlugin, TransformTemplateAware {
         }
         final JbossConfig jbossConfig = new JbossConfig(context.getConfig());
         final JbossDetector jbossDetector = new JbossDetector(jbossConfig.getBootstrapMains());
-        if (jbossDetector.detect()) {
+        final Jboss4Detector jboss4Detector = new Jboss4Detector(jbossConfig.getBootstrapMains());
+        if (jbossDetector.detect()||jboss4Detector.detect()) {
             logger.info("Detected application type : {}", JbossConstants.JBOSS);
             return false;
         }

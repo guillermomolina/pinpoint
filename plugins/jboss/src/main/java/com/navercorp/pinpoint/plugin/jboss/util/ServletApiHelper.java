@@ -9,5 +9,9 @@ public interface ServletApiHelper {
 
     boolean isAsyncDispatcherAfter(HttpServletRequest request);
 
+    public boolean isAsyncStarted(HttpServletRequest request);
+
+    public String getDispatcherTypeString(HttpServletRequest request);
+
     int getStatus(HttpServletResponse response);
 }

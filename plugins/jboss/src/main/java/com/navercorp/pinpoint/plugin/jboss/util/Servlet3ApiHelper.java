@@ -19,6 +19,16 @@ public class Servlet3ApiHelper implements ServletApiHelper {
     }
 
     @Override
+    public boolean isAsyncStarted(HttpServletRequest request) {
+        return request.isAsyncStarted();
+    }
+
+    @Override
+    public String getDispatcherTypeString(HttpServletRequest request) {
+        return request.getDispatcherType().toString();
+    }
+
+    @Override
     public int getStatus(HttpServletResponse response) {
         return response.getStatus();
     }

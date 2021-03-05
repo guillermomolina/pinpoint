@@ -32,7 +32,10 @@ import com.navercorp.pinpoint.common.trace.ServiceType;
 import com.navercorp.pinpoint.plugin.jboss.interceptor.ContextInvocationInterceptor;
 import com.navercorp.pinpoint.plugin.jboss.interceptor.MethodInvocationHandlerInterceptor;
 import com.navercorp.pinpoint.plugin.jboss.interceptor.RequestStartAsyncInterceptor;
+import com.navercorp.pinpoint.plugin.jboss.interceptor.EJBMethodInterceptor;
+import com.navercorp.pinpoint.plugin.jboss.interceptor.ProxyInvokeInterceptor;
 import com.navercorp.pinpoint.plugin.jboss.interceptor.StandardHostValveInvokeInterceptor;
+import com.navercorp.pinpoint.plugin.jboss.interceptor.getter.JbossRemoteProxyUriGetter;
 
 /**
  * The Class JbossPlugin.
@@ -61,7 +64,8 @@ public class JbossPlugin implements ProfilerPlugin, TransformTemplateAware {
         ServiceType applicationType = context.getConfiguredApplicationType();
         if (ServiceType.UNDEFINED.equals(applicationType)) {
             final JbossDetector jbossDetector = new JbossDetector(config.getBootstrapMains());
-            if (jbossDetector.detect()) {
+            final Jboss4Detector jboss4Detector = new Jboss4Detector(config.getBootstrapMains());
+            if (jbossDetector.detect()||jboss4Detector.detect()) {
                 logger.info("Detected application type : {}", JbossConstants.JBOSS);
                 if (context.registerApplicationType(JbossConstants.JBOSS)) {
                     applicationType = JbossConstants.JBOSS;
@@ -78,11 +82,11 @@ public class JbossPlugin implements ProfilerPlugin, TransformTemplateAware {
         }
     }
 
-    private void addTransformers(JbossConfig jbossConfig) {
+    private void addTransformers(final JbossConfig jbossConfig) {
         // Instrumenting class on the base of ejb based application or rest based application.
         if (jbossConfig.isTraceEjb()) {
             addMethodInvocationMessageHandlerEditor();
-        } else {
+        } else { 
             // Add async listener. Servlet 3.0
             addRequestEditor();
             addContextInvocationEditor();
@@ -91,6 +95,8 @@ public class JbossPlugin implements ProfilerPlugin, TransformTemplateAware {
             // Clear bind trace. defense code
             addStandardHostValveEditor();
         }
+        // JBoss 4.X
+        addProxyEditor();
     }
 
     private void requestFacade() {
@@ -99,7 +105,7 @@ public class JbossPlugin implements ProfilerPlugin, TransformTemplateAware {
 
     public static class RequestFacadeTransform implements TransformCallback {
         @Override
-        public byte[] doInTransform(Instrumentor instrumentor, ClassLoader classLoader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classfileBuffer) throws InstrumentException {
+        public byte[] doInTransform(final Instrumentor instrumentor, final ClassLoader classLoader, final String className, final Class<?> classBeingRedefined, final ProtectionDomain protectionDomain, final byte[] classfileBuffer) throws InstrumentException {
 
             final JbossConfig jbossConfig = new JbossConfig(instrumentor.getProfilerConfig());
 
@@ -119,10 +125,10 @@ public class JbossPlugin implements ProfilerPlugin, TransformTemplateAware {
     public static class RequestTransform implements TransformCallback {
 
         @Override
-        public byte[] doInTransform(Instrumentor instrumentor, ClassLoader classLoader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classfileBuffer) throws InstrumentException {
+        public byte[] doInTransform(final Instrumentor instrumentor, final ClassLoader classLoader, final String className, final Class<?> classBeingRedefined, final ProtectionDomain protectionDomain, final byte[] classfileBuffer) throws InstrumentException {
             final InstrumentClass target = instrumentor.getInstrumentClass(classLoader, className, classfileBuffer);
             // Add async listener. Servlet 3.0
-            InstrumentMethod startAsyncMethodEditor = target.getDeclaredMethod("startAsync", "javax.servlet.ServletRequest", "javax.servlet.ServletResponse");
+            final InstrumentMethod startAsyncMethodEditor = target.getDeclaredMethod("startAsync", "javax.servlet.ServletRequest", "javax.servlet.ServletResponse");
             if (startAsyncMethodEditor != null) {
                 startAsyncMethodEditor.addInterceptor(RequestStartAsyncInterceptor.class);
             }
@@ -136,7 +142,6 @@ public class JbossPlugin implements ProfilerPlugin, TransformTemplateAware {
      */
     private void addMethodInvocationMessageHandlerEditor() {
         transformTemplate.transform("org.jboss.as.ejb3.remote.protocol.versionone.MethodInvocationMessageHandler", MethodInvocationMessageHandlerTransform.class);
-
     }
 
     public static class MethodInvocationMessageHandlerTransform implements TransformCallback {
@@ -157,6 +162,41 @@ public class JbossPlugin implements ProfilerPlugin, TransformTemplateAware {
             return target.toBytecode();
         }
     }
+
+    /**
+     * Adds the proxy editor (JBOSS 4.x).
+     */
+    private void addProxyEditor() {
+        transformTemplate.transform("org.jboss.ejb3.stateful.StatefulRemoteProxy", ProxyTransform.class);
+        transformTemplate.transform("org.jboss.ejb3.stateless.StatelessRemoteProxy", ProxyTransform.class);
+        transformTemplate.transform("org.jboss.ejb3.service.ServiceRemoteProxy", ProxyTransform.class);
+        transformTemplate.transform("org.jboss.ejb3.stateful.StatefulLocalProxy", ProxyTransform.class);
+        transformTemplate.transform("org.jboss.ejb3.stateless.StatelessLocalProxy", ProxyTransform.class);
+        transformTemplate.transform("org.jboss.ejb3.service.ServiceLocalProxy", ProxyTransform.class);
+  }
+
+    public static class ProxyTransform implements TransformCallback {
+
+        @Override
+        public byte[] doInTransform(final Instrumentor instrumentor, final ClassLoader classLoader, final String className, final Class<?> classBeingRedefined,
+        final ProtectionDomain protectionDomain,
+        final byte[] classfileBuffer) throws InstrumentException {
+            final InstrumentClass target = instrumentor.getInstrumentClass(classLoader, className, classfileBuffer);
+            // Support EJB
+            // 
+            if (target.hasField("uri", "org.jboss.remoting.InvokerLocator")) {
+                target.addGetter(JbossRemoteProxyUriGetter.class, "uri");
+            }
+            final InstrumentMethod method =
+                    target.getDeclaredMethod("invoke", new String[]{ "java.lang.Object", "java.lang.reflect.Method", "java.lang.Object[]" });
+            if (method != null) {
+                method.addInterceptor(ProxyInvokeInterceptor.class);
+            }
+
+            return target.toBytecode();
+        }
+    }
+
 
     /**
      * Adds the context invocation editor.
@@ -201,6 +241,40 @@ public class JbossPlugin implements ProfilerPlugin, TransformTemplateAware {
             if (invokeMethod != null) {
                 invokeMethod.addInterceptor(StandardHostValveInvokeInterceptor.class);
             }
+            return target.toBytecode();
+        }
+    }
+
+    /**
+     * Adds the ejb method editor (JBOSS 4.x).
+     */
+    private void addEJBMethodEditor() {
+        transformTemplate.transform("org.jboss.ejb3.stateful.StatefulRemoteProxy", EJBMethodTransform.class);
+        transformTemplate.transform("org.jboss.ejb3.stateless.StatelessRemoteProxy", EJBMethodTransform.class);
+        transformTemplate.transform("org.jboss.ejb3.service.ServiceRemoteProxy", EJBMethodTransform.class);
+        transformTemplate.transform("org.jboss.ejb3.stateful.StatefulLocalProxy", EJBMethodTransform.class);
+        transformTemplate.transform("org.jboss.ejb3.stateless.StatelessLocalProxy", EJBMethodTransform.class);
+        transformTemplate.transform("org.jboss.ejb3.service.ServiceLocalProxy", EJBMethodTransform.class);
+  }
+
+    public static class EJBMethodTransform implements TransformCallback {
+
+        @Override
+        public byte[] doInTransform(final Instrumentor instrumentor, final ClassLoader classLoader, final String className, final Class<?> classBeingRedefined,
+        final ProtectionDomain protectionDomain,
+        final byte[] classfileBuffer) throws InstrumentException {
+            final InstrumentClass target = instrumentor.getInstrumentClass(classLoader, className, classfileBuffer);
+            // Support EJB
+            // 
+            if (target.hasField("uri", "org.jboss.remoting.InvokerLocator")) {
+                target.addGetter(JbossRemoteProxyUriGetter.class, "uri");
+            }
+            final InstrumentMethod method =
+                    target.getDeclaredMethod("invoke", new String[]{ "java.lang.Object", "java.lang.reflect.Method", "java.lang.Object[]" });
+            if (method != null) {
+                method.addInterceptor(EJBMethodInterceptor.class);
+            }
+
             return target.toBytecode();
         }
     }

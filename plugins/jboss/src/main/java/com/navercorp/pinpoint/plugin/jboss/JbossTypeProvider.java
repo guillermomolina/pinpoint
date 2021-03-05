@@ -15,6 +15,8 @@
  */
 package com.navercorp.pinpoint.plugin.jboss;
 
+
+import com.navercorp.pinpoint.common.trace.AnnotationKeyMatchers;
 import com.navercorp.pinpoint.common.trace.TraceMetadataProvider;
 import com.navercorp.pinpoint.common.trace.TraceMetadataSetupContext;
 
@@ -34,7 +36,6 @@ public class JbossTypeProvider implements TraceMetadataProvider {
     @Override
     public void setup(final TraceMetadataSetupContext context) {
         context.addServiceType(JbossConstants.JBOSS);
-        context.addServiceType(JbossConstants.JBOSS_METHOD);
+        context.addServiceType(JbossConstants.JBOSS_METHOD, AnnotationKeyMatchers.ARGS_MATCHER);
     }
-
 }

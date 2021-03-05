@@ -110,10 +110,12 @@ public class StandardHostValveInvokeInterceptor implements AroundInterceptor {
         try {
             final HttpServletRequest request = (HttpServletRequest) args[0];
             if (servletApiHelper.isAsyncDispatcherBefore(request)) {
+                logger.debug("Skip async servlet request event");/* 
                 if (isDebug) {
-                    logger.debug("Skip async servlet request event. isAsyncStarted={}, dispatcherType={}", request.isAsyncStarted(), request.getDispatcherType());
+                    logger.debug("Skip async servlet request event. isAsyncStarted={}, dispatcherType={}", 
+                        servletApiHelper.isAsyncStarted(request), servletApiHelper.getDispatcherTypeString(request));
                 }
-                return;
+                return;*/
             }
             this.servletRequestListener.initialized(request, JbossConstants.JBOSS_METHOD, this.methodDescriptor);
         } catch (Throwable t) {
@@ -138,10 +140,12 @@ public class StandardHostValveInvokeInterceptor implements AroundInterceptor {
             final HttpServletResponse response = (HttpServletResponse) args[1];
 
             if (servletApiHelper.isAsyncDispatcherAfter(request)) {
+                logger.debug("Skip async servlet request event");/* 
                 if (isDebug) {
-                    logger.debug("Skip async servlet request event. isAsyncStarted={}, dispatcherType={}", request.isAsyncStarted(), request.getDispatcherType());
+                    logger.debug("Skip async servlet request event. isAsyncStarted={}, dispatcherType={}", 
+                        servletApiHelper.isAsyncStarted(request), servletApiHelper.getDispatcherTypeString(request));
                 }
-                return;
+                return;*/
             }
             final int statusCode = servletApiHelper.getStatus(response);
             this.servletRequestListener.destroyed(request, throwable, statusCode);

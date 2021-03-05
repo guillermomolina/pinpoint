@@ -15,6 +15,8 @@
  */
 package com.navercorp.pinpoint.plugin.jboss;
 
+import com.navercorp.pinpoint.common.trace.AnnotationKey;
+import com.navercorp.pinpoint.common.trace.AnnotationKeyFactory;
 import static com.navercorp.pinpoint.common.trace.ServiceTypeProperty.*;
 import com.navercorp.pinpoint.common.trace.ServiceType;
 import com.navercorp.pinpoint.common.trace.ServiceTypeFactory;
